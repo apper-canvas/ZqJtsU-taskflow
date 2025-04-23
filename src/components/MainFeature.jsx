@@ -1,20 +1,31 @@
 import { useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, X, AlertCircle } from "lucide-react";
+import { addTask } from "../store/taskSlice";
+import { selectIsAuthenticated } from "../store/authSlice";
 
-const MainFeature = ({ onAddTask }) => {
+const MainFeature = ({ onShowAuth }) => {
+  const dispatch = useDispatch();
+  const isAuthenticated = useSelector(selectIsAuthenticated);
+  
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
     priority: "medium",
     status: "active",
-    createdAt: new Date().toISOString()
   });
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const toggleForm = () => {
+    if (!isAuthenticated) {
+      // Show authentication modal if not logged in
+      onShowAuth();
+      return;
+    }
+    
     setIsFormOpen(!isFormOpen);
     if (!isFormOpen) {
       setFormData({
@@ -22,7 +33,6 @@ const MainFeature = ({ onAddTask }) => {
         description: "",
         priority: "medium",
         status: "active",
-        createdAt: new Date().toISOString()
       });
       setErrors({});
     }
@@ -64,18 +74,17 @@ const MainFeature = ({ onAddTask }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    if (!isAuthenticated) {
+      onShowAuth();
+      return;
+    }
+    
     if (!validateForm()) return;
     
     setIsSubmitting(true);
     
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      onAddTask({
-        ...formData,
-        createdAt: new Date().toISOString()
-      });
+      await dispatch(addTask(formData)).unwrap();
       
       // Reset form and close
       setFormData({
@@ -83,7 +92,6 @@ const MainFeature = ({ onAddTask }) => {
         description: "",
         priority: "medium",
         status: "active",
-        createdAt: new Date().toISOString()
       });
       setIsFormOpen(false);
     } catch (error) {

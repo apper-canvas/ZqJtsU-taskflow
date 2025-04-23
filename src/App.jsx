@@ -1,17 +1,31 @@
 import { useState, useEffect } from "react";
 import { Routes, Route } from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
 import { motion } from "framer-motion";
-import { Sun, Moon } from "lucide-react";
+import { Sun, Moon, LogIn, LogOut } from "lucide-react";
 import Home from "./pages/Home";
 import NotFound from "./pages/NotFound";
+import AuthenticationModal from "./components/AuthenticationModal";
+import { fetchCurrentUser, logout, selectIsAuthenticated, selectUser } from "./store/authSlice";
 
 function App() {
+  const dispatch = useDispatch();
+  const isAuthenticated = useSelector(selectIsAuthenticated);
+  const user = useSelector(selectUser);
+  
   const [darkMode, setDarkMode] = useState(() => {
     const savedMode = localStorage.getItem("darkMode");
     return savedMode ? JSON.parse(savedMode) : 
       window.matchMedia("(prefers-color-scheme: dark)").matches;
   });
-
+  
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  
+  useEffect(() => {
+    // Check if user is already logged in
+    dispatch(fetchCurrentUser());
+  }, [dispatch]);
+  
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add("dark");
@@ -20,9 +34,21 @@ function App() {
     }
     localStorage.setItem("darkMode", JSON.stringify(darkMode));
   }, [darkMode]);
-
+  
   const toggleDarkMode = () => {
     setDarkMode(!darkMode);
+  };
+  
+  const handleAuthClick = () => {
+    if (isAuthenticated) {
+      dispatch(logout());
+    } else {
+      setShowAuthModal(true);
+    }
+  };
+  
+  const handleCloseAuthModal = () => {
+    setShowAuthModal(false);
   };
 
   return (
@@ -40,20 +66,40 @@ function App() {
             </motion.div>
           </div>
           
-          <motion.button
-            whileTap={{ scale: 0.9 }}
-            onClick={toggleDarkMode}
-            className="p-2 rounded-full bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors"
-            aria-label="Toggle dark mode"
-          >
-            {darkMode ? <Sun size={20} /> : <Moon size={20} />}
-          </motion.button>
+          <div className="flex items-center gap-3">
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={handleAuthClick}
+              className="flex items-center gap-2 py-2 px-3 rounded-lg bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors"
+            >
+              {isAuthenticated ? (
+                <>
+                  <LogOut size={18} />
+                  <span className="hidden sm:inline">Logout</span>
+                </>
+              ) : (
+                <>
+                  <LogIn size={18} />
+                  <span className="hidden sm:inline">Login</span>
+                </>
+              )}
+            </motion.button>
+            
+            <motion.button
+              whileTap={{ scale: 0.9 }}
+              onClick={toggleDarkMode}
+              className="p-2 rounded-full bg-surface-100 dark:bg-surface-800 hover:bg-surface-200 dark:hover:bg-surface-700 transition-colors"
+              aria-label="Toggle dark mode"
+            >
+              {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+            </motion.button>
+          </div>
         </div>
       </header>
 
       <main className="flex-grow">
         <Routes>
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<Home onShowAuth={() => setShowAuthModal(true)} />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
@@ -63,6 +109,11 @@ function App() {
           <p>© {new Date().getFullYear()} TaskFlow. All rights reserved.</p>
         </div>
       </footer>
+      
+      <AuthenticationModal 
+        isOpen={showAuthModal} 
+        onClose={handleCloseAuthModal} 
+      />
     </div>
   );
 }

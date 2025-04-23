@@ -1,54 +1,67 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
+import { useDispatch, useSelector } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Filter, SortAsc, SortDesc } from "lucide-react";
+import { Filter, SortAsc, SortDesc } from "lucide-react";
 import MainFeature from "../components/MainFeature";
+import { 
+  fetchAllTasks, 
+  updateTaskStatus, 
+  removeTaskById,
+  setFilter,
+  setSortOrder,
+  selectSortedFilteredTasks,
+  selectFilter,
+  selectSortOrder,
+  selectTasksStatus
+} from "../store/taskSlice";
+import { selectIsAuthenticated } from "../store/authSlice";
 
-const Home = () => {
-  const [tasks, setTasks] = useState(() => {
-    const savedTasks = localStorage.getItem("tasks");
-    return savedTasks ? JSON.parse(savedTasks) : [];
-  });
-  
-  const [filter, setFilter] = useState("all");
-  const [sortOrder, setSortOrder] = useState("desc"); // desc = newest first
+const Home = ({ onShowAuth }) => {
+  const dispatch = useDispatch();
+  const isAuthenticated = useSelector(selectIsAuthenticated);
+  const tasks = useSelector(selectSortedFilteredTasks);
+  const filter = useSelector(selectFilter);
+  const sortOrder = useSelector(selectSortOrder);
+  const status = useSelector(selectTasksStatus);
   
   useEffect(() => {
-    localStorage.setItem("tasks", JSON.stringify(tasks));
-  }, [tasks]);
-  
-  const addTask = (task) => {
-    setTasks([...tasks, { ...task, id: Date.now().toString() }]);
-  };
-  
-  const deleteTask = (id) => {
-    setTasks(tasks.filter(task => task.id !== id));
-  };
-  
-  const toggleTaskStatus = (id) => {
-    setTasks(tasks.map(task => 
-      task.id === id 
-        ? { ...task, status: task.status === "completed" ? "active" : "completed" } 
-        : task
-    ));
-  };
-  
-  const filteredTasks = tasks.filter(task => {
-    if (filter === "all") return true;
-    if (filter === "active") return task.status !== "completed";
-    if (filter === "completed") return task.status === "completed";
-    return true;
-  });
-  
-  const sortedTasks = [...filteredTasks].sort((a, b) => {
-    if (sortOrder === "asc") {
-      return new Date(a.createdAt) - new Date(b.createdAt);
-    } else {
-      return new Date(b.createdAt) - new Date(a.createdAt);
+    if (isAuthenticated) {
+      dispatch(fetchAllTasks());
     }
-  });
+  }, [dispatch, isAuthenticated]);
   
-  const toggleSortOrder = () => {
-    setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+  const handleAddTask = (task) => {
+    // This is now handled through the MainFeature component with Redux
+  };
+  
+  const handleDeleteTask = (id) => {
+    if (isAuthenticated) {
+      dispatch(removeTaskById(id));
+    } else {
+      onShowAuth();
+    }
+  };
+  
+  const handleToggleTaskStatus = (id, currentStatus) => {
+    if (isAuthenticated) {
+      const newStatus = currentStatus === "completed" ? "active" : "completed";
+      dispatch(updateTaskStatus({ id, status: newStatus }));
+    } else {
+      onShowAuth();
+    }
+  };
+  
+  const handleFilterChange = () => {
+    const newFilter = filter === "all" 
+      ? "active" 
+      : filter === "active" 
+        ? "completed" 
+        : "all";
+    dispatch(setFilter(newFilter));
+  };
+  
+  const handleToggleSortOrder = () => {
+    dispatch(setSortOrder(sortOrder === "asc" ? "desc" : "asc"));
   };
   
   return (
@@ -68,7 +81,7 @@ const Home = () => {
           </p>
         </motion.div>
         
-        <MainFeature onAddTask={addTask} />
+        <MainFeature onShowAuth={onShowAuth} />
         
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -83,14 +96,7 @@ const Home = () => {
               <div className="relative">
                 <button 
                   className="btn btn-outline flex items-center gap-1"
-                  onClick={() => {
-                    const newFilter = filter === "all" 
-                      ? "active" 
-                      : filter === "active" 
-                        ? "completed" 
-                        : "all";
-                    setFilter(newFilter);
-                  }}
+                  onClick={handleFilterChange}
                 >
                   <Filter size={16} />
                   <span className="capitalize">{filter}</span>
@@ -99,7 +105,7 @@ const Home = () => {
               
               <button 
                 className="btn btn-outline flex items-center gap-1"
-                onClick={toggleSortOrder}
+                onClick={handleToggleSortOrder}
               >
                 {sortOrder === "asc" ? (
                   <>
@@ -117,76 +123,87 @@ const Home = () => {
           </div>
           
           <div className="space-y-3">
-            <AnimatePresence>
-              {sortedTasks.length > 0 ? (
-                sortedTasks.map((task) => (
+            {status === 'loading' && !tasks.length ? (
+              <div className="flex justify-center py-10">
+                <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
+              </div>
+            ) : (
+              <AnimatePresence>
+                {tasks.length > 0 ? (
+                  tasks.map((task) => (
+                    <motion.div
+                      key={task.Id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, x: -10 }}
+                      transition={{ duration: 0.2 }}
+                      className={`card p-4 task-item priority-${task.priority}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <h3 
+                              className={`font-medium text-lg ${
+                                task.status === "completed" 
+                                  ? "line-through text-surface-400 dark:text-surface-500" 
+                                  : ""
+                              }`}
+                            >
+                              {task.title}
+                            </h3>
+                            <span 
+                              className={`text-xs px-2 py-0.5 rounded-full ${
+                                task.priority === "high" 
+                                  ? "bg-secondary/10 text-secondary" 
+                                  : task.priority === "medium"
+                                    ? "bg-accent/10 text-accent"
+                                    : "bg-primary/10 text-primary"
+                              }`}
+                            >
+                              {task.priority}
+                            </span>
+                          </div>
+                          <p className="text-surface-600 dark:text-surface-400 mt-1">
+                            {task.description}
+                          </p>
+                          <div className="mt-2 text-sm text-surface-500">
+                            {new Date(task.created_at || task.CreatedOn).toLocaleDateString()}
+                          </div>
+                        </div>
+                        
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleToggleTaskStatus(task.Id, task.status)}
+                            className="btn btn-outline py-1 px-3"
+                          >
+                            {task.status === "completed" ? "Undo" : "Complete"}
+                          </button>
+                          <button
+                            onClick={() => handleDeleteTask(task.Id)}
+                            className="btn btn-outline py-1 px-3 text-secondary"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))
+                ) : (
                   <motion.div
-                    key={task.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, x: -10 }}
-                    transition={{ duration: 0.2 }}
-                    className={`card p-4 task-item priority-${task.priority}`}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="text-center py-10 text-surface-500"
                   >
-                    <div className="flex items-start gap-3">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <h3 
-                            className={`font-medium text-lg ${
-                              task.status === "completed" 
-                                ? "line-through text-surface-400 dark:text-surface-500" 
-                                : ""
-                            }`}
-                          >
-                            {task.title}
-                          </h3>
-                          <span 
-                            className={`text-xs px-2 py-0.5 rounded-full ${
-                              task.priority === "high" 
-                                ? "bg-secondary/10 text-secondary" 
-                                : task.priority === "medium"
-                                  ? "bg-accent/10 text-accent"
-                                  : "bg-primary/10 text-primary"
-                            }`}
-                          >
-                            {task.priority}
-                          </span>
-                        </div>
-                        <p className="text-surface-600 dark:text-surface-400 mt-1">
-                          {task.description}
-                        </p>
-                        <div className="mt-2 text-sm text-surface-500">
-                          {new Date(task.createdAt).toLocaleDateString()}
-                        </div>
-                      </div>
-                      
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => toggleTaskStatus(task.id)}
-                          className="btn btn-outline py-1 px-3"
-                        >
-                          {task.status === "completed" ? "Undo" : "Complete"}
-                        </button>
-                        <button
-                          onClick={() => deleteTask(task.id)}
-                          className="btn btn-outline py-1 px-3 text-secondary"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
+                    <p>
+                      {isAuthenticated 
+                        ? "No tasks found. Create your first task above!" 
+                        : "Sign in to view and manage your tasks."
+                      }
+                    </p>
                   </motion.div>
-                ))
-              ) : (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="text-center py-10 text-surface-500"
-                >
-                  <p>No tasks found. Create your first task above!</p>
-                </motion.div>
-              )}
-            </AnimatePresence>
+                )}
+              </AnimatePresence>
+            )}
           </div>
         </motion.div>
       </div>
